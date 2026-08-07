@@ -2222,10 +2222,15 @@ void NPC::sendDriverSync()
 	{
 		return;
 	}
+
 	uint16_t upAndDown, leftAndRight, keys;
 	getKeys(upAndDown, leftAndRight, keys);
+
 	uint16_t vehicleID = vehicle_->getID();
+
+	// Check if immediate update is needed (basic comparison for now)
 	bool needsImmediateUpdate = driverSync_.LeftRight != leftAndRight || driverSync_.UpDown != upAndDown || driverSync_.Keys != keys || driverSync_.Position != position_ || driverSync_.Rotation.q != rotation_.q || driverSync_.PlayerHealthArmour.x != health_ || driverSync_.PlayerHealthArmour.y != armour_ || driverSync_.VehicleID != vehicleID || driverSync_.Velocity != velocity_ || driverSync_.Health != vehicleHealth_;
+
 	auto generateDriverSyncBitStream = [&](NetworkBitStream& bs)
 	{
 		driverSync_.VehicleID = vehicleID;
@@ -2238,14 +2243,16 @@ void NPC::sendDriverSync()
 		driverSync_.PlayerHealthArmour.y = armour_;
 		driverSync_.Velocity = velocity_;
 		driverSync_.Health = vehicleHealth_;
+
 		driverSync_.Siren = uint8_t(useVehicleSiren_);
 		driverSync_.LandingGear = vehicleGearState_;
+
 		int model = vehicle_->getModel();
-		if (model == 520)
+		if (model == 520) // hydra model id
 		{
 			driverSync_.HydraThrustAngle = hydraThrusterDirection_;
 		}
-		else if (model == 537 || model == 538 || model == 570 || model == 569 || model == 449)
+		else if (model == 537 || model == 538 || model == 570 || model == 569 || model == 449) // train part models
 		{
 			driverSync_.TrainSpeed = vehicleTrainSpeed_;
 		}
@@ -2253,9 +2260,11 @@ void NPC::sendDriverSync()
 		{
 			driverSync_.TrainSpeed = 0.0f;
 		}
+
 		driverSync_.TrailerID = INVALID_VEHICLE_ID;
 		driverSync_.HasTrailer = false;
 		driverSync_.AdditionalKeyWeapon = weapon_;
+
 		bs.writeUINT8(driverSync_.PacketID);
 		bs.writeUINT16(driverSync_.VehicleID);
 		bs.writeUINT16(driverSync_.LeftRight);
@@ -2282,8 +2291,8 @@ void NPC::sendDriverSync()
 			syncRotation.q.y = -sy * sp;
 			syncRotation.q.z = sy * cp;
 		}
-		bs.writeVEC4(Vector4(syncRotation.q.w, syncRotation.q.x, syncRotation.q.y, syncRotation.q.z));
 
+		bs.writeVEC4(Vector4(syncRotation.q.w, syncRotation.q.x, syncRotation.q.y, syncRotation.q.z));
 		bs.writeVEC3(driverSync_.Position);
 		bs.writeVEC3(driverSync_.Velocity);
 		bs.writeFLOAT(driverSync_.Health);
@@ -2295,6 +2304,7 @@ void NPC::sendDriverSync()
 		bs.writeUINT16(driverSync_.TrailerID);
 		bs.writeUINT32(driverSync_.HydraThrustAngle);
 	};
+
 	if (needsImmediateUpdate)
 	{
 		NetworkBitStream bs;
