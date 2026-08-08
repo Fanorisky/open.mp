@@ -499,8 +499,17 @@ bool NPC::move(Vector3 pos, NPCMoveType moveType, float moveSpeed, float stopRan
 	{
 		front = (pos - position) / distance;
 		auto rotation = getRotation().ToEuler();
+		rotation.x = 0.0f; // Discard the pitch a previous drive move may have baked in, it would skew the facing angle
 		rotation.z = getAngleOfLine(front.x, front.y);
 		rotation_ = GTAQuat(rotation); // Do this directly, if you use NPC::setRotation it's going to cause recursion
+
+		if (moveType_ == NPCMoveType_Drive)
+		{
+			// Tilt the vehicle to match the slope towards the target
+			const float pitch = -atan2(front.z, glm::length(glm::vec2(front)));
+			const float yaw = glm::roll(rotation_.q); // glm is Y up, so its roll() is the rotation around our Z axis
+			rotation_.q = glm::angleAxis(pitch, Vector3(1.0f, 0.0f, 0.0f)) * glm::angleAxis(yaw, Vector3(0.0f, 0.0f, 1.0f));
+		}
 
 		// Calculate velocity to use on tick
 		velocity_ = front * (moveSpeed_ / 100.0f);
@@ -2270,29 +2279,7 @@ void NPC::sendDriverSync()
 		bs.writeUINT16(driverSync_.LeftRight);
 		bs.writeUINT16(driverSync_.UpDown);
 		bs.writeUINT16(driverSync_.Keys);
-
-		// Pitch-adjusted rotation
-		GTAQuat syncRotation = rotation_;
-		if (moving_)
-		{
-			float dx = targetPosition_.x - position_.x;
-			float dy = targetPosition_.y - position_.y;
-			float dz = targetPosition_.z - position_.z;
-			float pitch = -atan2(dz, sqrt(dx * dx + dy * dy));
-
-			float qw = rotation_.q.w, qx = rotation_.q.x, qy = rotation_.q.y, qz = rotation_.q.z;
-			float yaw = atan2(2.0f * (qw * qz + qx * qy), 1.0f - 2.0f * (qy * qy + qz * qz));
-
-			float cy = cos(yaw * 0.5f), sy = sin(yaw * 0.5f);
-			float cp = cos(pitch * 0.5f), sp = sin(pitch * 0.5f);
-
-			syncRotation.q.w = cy * cp;
-			syncRotation.q.x = cy * sp;
-			syncRotation.q.y = -sy * sp;
-			syncRotation.q.z = sy * cp;
-		}
-
-		bs.writeVEC4(Vector4(syncRotation.q.w, syncRotation.q.x, syncRotation.q.y, syncRotation.q.z));
+		bs.writeVEC4(Vector4(driverSync_.Rotation.q.w, driverSync_.Rotation.q.x, driverSync_.Rotation.q.y, driverSync_.Rotation.q.z));
 		bs.writeVEC3(driverSync_.Position);
 		bs.writeVEC3(driverSync_.Velocity);
 		bs.writeFLOAT(driverSync_.Health);
